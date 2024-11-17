@@ -16,7 +16,11 @@
     repo: "{{ postgresql_apt_repo }}"
 
 - name: Install required postgres packages
-  apt: name={{ item }} state=latest update_cache=yes cache_valid_time=86400
+  apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: yes
+    cache_valid_time: 86400
   loop:
     - "{{ postgresql_packages }}"
     - "{{ postgresql_python_packages }}"
@@ -33,7 +37,7 @@
     src: "{{ postgresql_parameters_template }}"
     dest: "{{ postgresql_config_path }}/postgresql.conf"
   notify:
-  - Restart postgresql
+    - Restart postgresql
 
 - meta: flush_handlers
 
@@ -56,26 +60,15 @@
   become: true
   become_user: "{{ postgresql_admin_user }}"
 
-- name: Create users
+- name: Create PostgreSQL users
+  become: true
+  become_user: "{{ postgresql_admin_user }}"
+  vars:
+    ansible_remote_tmp: /home/{{ postgresql_admin_user }}/.ansible/tmp
   postgresql_user:
     name: "{{ item.name }}"
     password: "{{ item.password }}"
     role_attr_flags: "{{ item.role_attr_flags | default(postgresql_users_role_attr_flags) | join(',') | replace('\\n', '') }}"
   with_items: "{{ postgresql_users }}"
   when: item.name != ''
-  become: true
-  become_user: "{{ postgresql_admin_user }}"
 
-- name: Create databases
-  postgresql_db:
-    name: "{{ item.name }}"
-    owner: "{{ item.owner | default(postgresql_user, true) }}"
-    encoding: "{{ item.encoding | default(postgresql_encoding) }}"
-    lc_collate: "{{ item.lc_collate | default(postgresql_locale + '.' + postgresql_encoding) }}"
-    lc_ctype: "{{ item.lc_ctype | default(postgresql_locale + '.' + postgresql_encoding) }}"
-    template: "{{ item.template | default('template0') }}"
-    state: present
-  with_items: "{{ postgresql_databases }}"
-  when: item.name != ''
-  become: true
-  become_user: "{{ postgresql_admin_user }}"
